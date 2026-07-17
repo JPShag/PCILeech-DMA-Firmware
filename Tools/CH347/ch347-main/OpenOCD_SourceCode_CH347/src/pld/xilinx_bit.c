@@ -1,0 +1,131 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+
+/***************************************************************************
+ *   Copyright (C) 2006 by Dominic Rath                                    *
+ *   Dominic.Rath@gmx.de                                                   *
+ ***************************************************************************/
+
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
+
+#include "xilinx_bit.h"
+#include "pld.h"
+#include <helper/log.h>
+
+#include <helper/system.h>
+
+static int read_section(FILE *input_file, int length_size, char section,
+	uint32_t *buffer_length, uint8_t **buffer)
+{
+	uint8_t length_buffer[4];
+	int length;
+	char section_char;
+	int read_count;
+
+	if ((length_size != 2) && (length_size != 4)) {
+		LOG_ERROR("BUG: length_size neither 2 nor 4");
+		return ERROR_PLD_FILE_LOAD_FAILED;
+	}
+
+	read_count = fread(&section_char, 1, 1, input_file);
+	if (read_count != 1)
+		return ERROR_PLD_FILE_LOAD_FAILED;
+
+	if (section_char != section)
+		return ERROR_PLD_FILE_LOAD_FAILED;
+
+	read_count = fread(length_buffer, 1, length_size, input_file);
+	if (read_count != length_size)
+		return ERROR_PLD_FILE_LOAD_FAILED;
+
+	if (length_size == 4)
+		length = be_to_h_u32(length_buffer);
+	else	/* (length_size == 2) */
+		length = be_to_h_u16(length_buffer);
+
+	if (buffer_length)
+		*buffer_length = length;
+
+	*buffer = malloc(length);
+
+	read_count = fread(*buffer, 1, length, input_file);
+	if (read_count != length)
+		return ERROR_PLD_FILE_LOAD_FAILED;
+
+	return ERROR_OK;
+}
+
+int xilinx_read_bit_file(struct xilinx_bit_file *bit_file, const char *filename)
+{
+	FILE *input_file;
+	int read_count;
+
+	if (!filename || !bit_file)
+		return ERROR_COMMAND_SYNTAX_ERROR;
+
+	input_file = fopen(filename, "rb");
+	if (!input_file) {
+		LOG_ERROR("couldn't open %s: %s", filename, strerror(errno));
+		return ERROR_PLD_FILE_LOAD_FAILED;
+	}
+
+	bit_file->source_file = NULL;
+	bit_file->part_name = NULL;
+	bit_file->date = NULL;
+	bit_file->time = NULL;
+	bit_file->data = NULL;
+
+	read_count = fread(bit_file->unknown_header, 1, 13, input_file);
+	if (read_count != 13) {
+		LOG_ERROR("couldn't read unknown_header from file '%s'", filename);
+		fclose(input_file);
+		return ERROR_PLD_FILE_LOAD_FAILED;
+	}
+
+	if (read_section(input_file, 2, 'a', NULL, &bit_file->source_file) != ERROR_OK) {
+		xilinx_free_bit_file(bit_file);
+		fclose(input_file);
+		return ERROR_PLD_FILE_LOAD_FAILED;
+	}
+
+	if (read_section(input_file, 2, 'b', NULL, &bit_file->part_name) != ERROR_OK) {
+		xilinx_free_bit_file(bit_file);
+		fclose(input_file);
+		return ERROR_PLD_FILE_LOAD_FAILED;
+	}
+
+	if (read_section(input_file, 2, 'c', NULL, &bit_file->date) != ERROR_OK) {
+		xilinx_free_bit_file(bit_file);
+		fclose(input_file);
+		return ERROR_PLD_FILE_LOAD_FAILED;
+	}
+
+	if (read_section(input_file, 2, 'd', NULL, &bit_file->time) != ERROR_OK) {
+		xilinx_free_bit_file(bit_file);
+		fclose(input_file);
+		return ERROR_PLD_FILE_LOAD_FAILED;
+	}
+
+	if (read_section(input_file, 4, 'e', &bit_file->length, &bit_file->data) != ERROR_OK) {
+		xilinx_free_bit_file(bit_file);
+		fclose(input_file);
+		return ERROR_PLD_FILE_LOAD_FAILED;
+	}
+
+	LOG_DEBUG("bit_file: %s %s %s,%s %" PRIu32 "", bit_file->source_file, bit_file->part_name,
+		bit_file->date, bit_file->time, bit_file->length);
+
+	fclose(input_file);
+
+	return ERROR_OK;
+}
+
+void xilinx_free_bit_file(struct xilinx_bit_file *bit_file)
+{
+	free(bit_file->source_file);
+	free(bit_file->part_name);
+	free(bit_file->date);
+	free(bit_file->time);
+	free(bit_file->data);
+}

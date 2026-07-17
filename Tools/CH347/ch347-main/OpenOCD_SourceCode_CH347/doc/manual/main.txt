@@ -1,0 +1,107 @@
+/** @mainpage OpenOCD Developer's Guide
+
+Welcome to the OpenOCD Developer's Guide -- the developer's resource for
+learning about the internal architecture of the OpenOCD project. @par
+
+In addition, this document contains the tactical and strategic plans
+and processes that have been developed by and for the OpenOCD community.
+
+Developers that want to contribute to OpenOCD should read the following
+sections before starting work:
+
+- @subpage thelist enumerates opportunities for improving or
+extending the OpenOCD platform.  If your ideas are on The List, you might
+check the mailing list archives to find the status of your feature (or bug).
+- The @subpage styleguide provides rules that developers should
+  follow when writing new code for OpenOCD.
+- The @subpage patchguide provides policies that developers should
+  follow when submitting patches to the project.
+- The @subpage bugs page contains the content of the BUGS file, which
+  provides instructions for submitting bug reports to the maintainers.
+- The @subpage releases page describes the project's release process.
+- The @subpage endianness provides hints about writing and testing
+  endianness independent code for OpenOCD.
+
+@ref primer provide introductory materials for new developers on various
+specific topics.
+
+Finally, the @ref oocd pages explain how the code has been organized
+into layers of APIs, providing an overview of how they fit together.
+These pages attempt to give developers a high-level perspective of the
+various code modules provided by OpenOCD.
+
+ */
+
+/** @page primer OpenOCD Technical Primers
+
+This pages lists Technical Primers available for OpenOCD Developers.
+They seek to provide information to pull novices up the learning curves
+associated with the fundamental technologies used by OpenOCD.
+
+- @subpage primerdocs
+- @subpage primerautotools
+- @subpage primertcl
+- @subpage primerjtag
+
+The above documents should bridge any "ancillary" gaps in contributor
+knowledge, without having to learn the complete languages or technology.
+They should provide enough information for experienced developers to
+learn how to make "correct" changes when creating patches.
+
+Beyond the fundamentals, the following primers provide introductory
+tutorials for OpenOCD's sub-systems.  These complement the @ref oocd
+pages that provide more high-level perspective on related topics.
+
+- @subpage primercommand
+
+In all cases, these Primers should use idiomatic conventions that the
+community has agreed are the "right way of doing things".  In this
+respect, these documents typically assume some familiarity with the
+information contained in one or more @ref styleguide, or they will
+directly refer to specific style guides as supplemental reading.
+
+Contributions or suggestions for new Technical Primers are welcome.
+
+ */
+
+/** @page oocd OpenOCD Architecture
+
+The OpenOCD library consists of several APIs that build together to
+provide the support functionality.  The following list shows how these
+modules are stacked in the current implementation (from bottom to top):
+
+- @subpage helperdocs
+  - @ref helperporting
+  - @ref helperjim
+  - @ref helpercommand
+  - @ref helperlogging
+- @subpage jtagdocs
+  - @ref jtagcore
+  - @ref jtagtcl
+  - @ref jtagcmd
+  - @ref jtagiface
+  - @ref jtagdriver
+- @subpage targetdocs
+  - @ref targetarm
+  - @ref targetnotarm
+  - @ref targetmips
+  - @ref targetregister
+  - @ref targetimage
+  - @ref targettrace
+- @subpage flashdocs
+  - @ref flashcfi
+  - @ref flashnand
+  - @ref flashtarget
+- @subpage serverdocs
+  - @ref servergdb
+  - @ref servertelnet
+  - @ref serverhttp
+- @subpage appdocs
+
+Obviously, there are some nuances to the stack that are not shown by
+this linear list of layers.
+
+The List of @ref thelist enumerates opportunities for improving or
+extending the OpenOCD platform.
+
+ */

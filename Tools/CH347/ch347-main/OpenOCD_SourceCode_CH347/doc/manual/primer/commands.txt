@@ -1,0 +1,138 @@
+/** @page primercommand Command Development Primer
+
+This page provides a primer for writing commands by introducing @c hello
+module.  The full source code used in this example can be found in
+hello.c, and the @ref primercmdcode section shows how to use it.
+
+A summary of this information can be found in @ref helpercommand .
+
+@section primercmdhandler Command Handlers
+
+Defining new commands and their helpers is easy.  The following code
+defines a simple command handler that delegates its argument parsing:
+@code
+COMMAND_HANDLER(handle_hello_command)
+{
+	const char *sep, *name;
+	int retval = CALL_COMMAND_HANDLER(handle_hello_args);
+	if (ERROR_OK == retval)
+		command_print(CMD, "Greetings%s%s!", sep, name);
+	return retval;
+}
+@endcode
+
+Here, the @c COMMAND_HANDLER macro establishes the function signature,
+see in command.h by the @c __COMMAND_HANDLER macro.
+
+The COMMAND_HELPER macro function allows defining functions with an
+extended version of the base signature.  These helper functions can be
+called (with the appropriate parameters), the @c CALL_COMMAND_HANDLER
+macro to pass any e as parameters to the following helper function:
+
+The subsequent blocks of code are a normal C function that can do
+anything, so only complex commands deserve should use command helper
+functions.  In this respect, this example uses one to demonstrate how --
+not when -- they should be used.
+
+@code
+static COMMAND_HELPER(handle_hello_args, const char **sep, const char **name)
+{
+	if (argc > 1)
+	{
+		LOG_ERROR("%s: too many arguments", CMD_NAME);
+		return ERROR_COMMAND_SYNTAX_ERROR;
+	}
+	if (1 == CMD_ARGC)
+	{
+		*sep = ", ";
+		*name = CMD_ARGV[0];
+	}
+	else
+		*sep = *name = "";
+
+	return ERROR_OK;
+}
+@endcode
+
+Of course, you may also call other macros or functions, but that extends
+beyond the scope of this tutorial on writing commands.
+
+@section primercmdreg Command Registration
+
+Before this new function can be used, it must be registered somehow.
+For a new module, registering should be done in a new function for
+the purpose, which must be called from @c openocd.c:
+@code
+
+static const struct command_registration hello_command_handlers[] = {
+	{
+		.name = "hello",
+		.mode = COMMAND_ANY,
+		.handler = handle_hello_command,
+		.help = "print a warm greeting",
+		.usage = "[name]",
+	},
+	{
+		.chain = foo_command_handlers,
+	}
+	COMMAND_REGISTRATION_DONE
+};
+
+int hello_register_commands(struct command_context_s *cmd_ctx)
+{
+	return register_commands(cmd_ctx, NULL, handle_command_handlers);
+}
+@endcode
+
+Note that the "usage" text should use the same EBNF that's found
+in the User's Guide:  literals in 'single quotes', sequences of
+optional parameters in [square brackets], and alternatives in
+(parentheses|with|vertical bars), and so forth.  No angle brackets.
+
+That's it!  The command should now be registered and available to scripts.
+
+@section primercmdchain Command Chaining
+
+This example also shows how to chain command handler registration, so
+your modules can "inherit" commands provided by other (sub)modules.
+Here, the hello module includes the foo commands in the same context
+that the 'hello' command will be registered.
+
+If the @c chain field had been put in the 'hello' command, then the
+@c foo module commands would be registered under it.  Indeed, that
+technique is used to define the 'foo bar' and 'foo baz' commands,
+as well as for the example drivers that use these modules.
+
+The code for the 'foo' command handlers can be found in @c hello.c.
+
+@section primercmdcode Trying These Example Commands
+
+These commands have been inherited by the dummy interface, faux flash,
+and testee target drivers.  The easiest way to test these is by using the
+dummy interface.
+
+Once OpenOCD has been built with this example code, the following command
+demonstrates the abilities that the @c hello module provides:
+@code
+openocd -c 'interface dummy' \
+	-c 'dummy hello' \
+	-c 'dummy hello World' \
+	-c 'dummy hello {John Doe}' \
+	-c 'dummy hello John Doe'  # error: too many arguments
+@endcode
+
+If saved in @c hello.cfg, then running <code>openocd -f hello.cfg</code>
+should produce the following output before displaying the help text and
+exiting:
+@code
+Greetings!
+Greetings, World!
+Greetings, John Doe!
+Error: hello: too many arguments
+Runtime error, file "openocd.cfg", line 14:
+    hello: too many arguments
+dummy hello [<name>]
+      prints a warm welcome
+@endcode
+
+ */

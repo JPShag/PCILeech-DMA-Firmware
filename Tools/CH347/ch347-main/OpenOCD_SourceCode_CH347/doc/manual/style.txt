@@ -1,0 +1,487 @@
+/** @page styleguide Style Guides
+
+The goals for each of these guides are:
+- to produce correct code that appears clean, consistent, and readable,
+- to allow developers to create patches that conform to a standard, and
+- to eliminate these issues as points of future contention.
+
+Some of these rules may be ignored in the spirit of these stated goals;
+however, such exceptions should be fairly rare.
+
+The following style guides describe a formatting, naming, and other
+conventions that should be followed when writing or changing the OpenOCD
+code:
+
+- @subpage styletcl
+- @subpage stylec
+- @subpage styleperl
+- @subpage styleautotools
+
+In addition, the following style guides provide information for
+providing documentation, either as part of the C code or stand-alone.
+
+- @subpage styledoxygen
+- @subpage styletexinfo
+- @subpage stylelatex
+
+Feedback would be welcome to improve the OpenOCD guidelines.
+
+ */
+/** @page styletcl TCL Style Guide
+
+OpenOCD needs to expand its Jim/TCL Style Guide.
+
+Many of the guidelines listed on the @ref stylec page should apply to
+OpenOCD's Jim/TCL code as well.
+
+ */
+/** @page stylec C Style Guide
+
+This page contains guidelines for writing new C source code for the
+OpenOCD project.
+
+@section styleformat Formatting Guide
+
+- remove any trailing white space at the end of lines.
+- use TAB characters for indentation; do NOT use spaces.
+- displayed TAB width is 4 characters.
+- use Unix line endings ('\\n'); do NOT use DOS endings ('\\r\\n')
+- limit adjacent empty lines to at most two (2).
+- remove any trailing empty lines at the end of source files
+- do not "comment out" code from the tree nor put it within a block
+  @code
+  #if 0
+  ...
+  #endif
+  @endcode
+  otherwise it would never be checked at compile time and when new
+  patches get merged it could be not compilable anymore.
+  Code that is not fully working nor ready for submission should
+  instead be removed entirely (git can retrieve the old version).
+  For exceptional cases that require keeping some unused code, let
+  the compiler check it by putting it in a block
+  @code
+  if (false) {
+      /* explain why this code should be kept here */
+      ...
+  }
+  @endcode
+- in a @c switch statement align the @c switch with the @c case label
+  @code
+  switch (dev_id) {
+  case 0x0123:
+      size = 0x10000;
+      break;
+  case 0x0412:
+      size = 0x20000;
+      break;
+  default:
+      size = 0x40000;
+      break;
+  }
+  @endcode
+- in an <tt> if / then / else </tt> statement, if only one of the conditions
+  require curly brackets due to multi-statement block, put the curly brackets
+  also to the other condition
+  @code
+  if (x > 0)
+      a = 12 + x;
+  else
+      a = 24;
+  @endcode
+  @code
+  if (x > 0) {
+      a = 12 + x;
+  } else {
+      a = 24;
+      x = 0;
+  }
+  @endcode
+
+Finally, try to avoid lines of code that are longer than 72-80 columns:
+
+- long lines frequently indicate other style problems:
+  - insufficient use of static functions, macros, or temporary variables
+  - poor flow-control structure; "inverted" logical tests
+- a few lines may be wider than this limit (typically format strings), but:
+  - all C compilers will concatenate series of string constants.
+  - all long string constants should be split across multiple lines.
+  - do never exceed 120 columns.
+
+@section stylenames Naming Rules
+
+- most identifiers must use lower-case letters (and digits) only.
+  - macros must use upper-case letters (and digits) only.
+  - OpenOCD identifiers should NEVER use @c MixedCaps.
+- @c typedef names must end with the '_t' suffix.
+  - This should be reserved for types that should be passed by value.
+  - Do @b not mix the typedef keyword with @c struct.
+- use underline characters between consecutive words in identifiers
+  (e.g. @c more_than_one_word).
+
+@section style_include_guards Include Guards
+
+Every header file should have a unique include guard to prevent multiple
+inclusion.
+To guarantee uniqueness, an include guard should be based on the filename and
+the full path in the project source tree.
+
+For the header file src/helper/jim-nvp.h, the include guard would look like
+this:
+
+@code
+#ifndef OPENOCD_HELPER_JIM_NVP_H
+#define OPENOCD_HELPER_JIM_NVP_H
+
+/* Your code here. */
+
+#endif /* OPENOCD_HELPER_JIM_NVP_H */
+@endcode
+
+@section stylec99 C99 Rules
+
+- inline functions
+- @c // comments -- in new code, prefer these for single-line comments
+- trailing comma allowed in enum declarations
+- designated initializers ( .field = value )
+- variables declarations should occur at the point of first use
+- new block scopes for selection and iteration statements
+- use malloc() to create dynamic arrays. Do @b not use @c alloca
+or variable length arrays on the stack. non-MMU hosts(uClinux) and
+pthreads require modest and predictable stack usage.
+
+@section styletypes Type Guidelines
+- use native types (@c int or <tt> unsigned int </tt>) if the type is not important
+  - if size matters, use the types from \<stdint.h\> or \<inttypes.h\>:
+    - @c int8_t, @c int16_t, @c int32_t, or @c int64_t: signed types of specified size
+    - @c uint8_t, @c uint16_t, @c uint32_t, or @c uint64_t: unsigned types of specified size
+    - use the associated @c printf and @c scanf formatting strings for these types
+      (e.g. @c PRId8, PRIx16, SCNu8, ...)
+  - do @b NOT redefine @c uN types from "types.h"
+  - use type @c target_addr_t for target's address values
+  - prefer type <tt> unsigned int </tt> to type @c unsigned
+
+@section stylefunc Functions
+
+- static inline functions should be preferred over macros:
+@code
+/* do NOT define macro-like functions like this... */
+#define CUBE(x) ((x) * (x) * (x))
+/* instead, define the same expression using a C99 inline function */
+static inline int cube(int x) { return x * x * x; }
+@endcode
+- Functions should be declared static unless required by other modules
+  - define static functions before first usage to avoid forward declarations.
+- Functions should have no space between its name and its parameter list:
+@code
+int f(int x1, int x2)
+{
+	...
+	int y = f(x1, x2 - x1);
+	...
+}
+@endcode
+- Separate assignment and logical test statements.  In other words, you
+should write statements like the following:
+@code
+// separate statements should be preferred
+result = foo();
+if (result != ERROR_OK)
+	...
+@endcode
+More directly, do @b not combine these kinds of statements:
+@code
+// Combined statements should be avoided
+if ((result = foo()) != ERROR_OK)
+	return result;
+@endcode
+- Do not compare @c bool values with @c true or @c false but use the
+  value directly
+@code
+if (!is_enabled)
+    ...
+@endcode
+- Avoid comparing pointers with @c NULL
+@code
+buf = malloc(buf_size);
+if (!buf) {
+    LOG_ERROR("Out of memory");
+    return ERROR_FAIL;
+}
+@endcode
+
+ */
+/** @page styledoxygen Doxygen Style Guide
+
+The following sections provide guidelines for OpenOCD developers
+who wish to write Doxygen comments in the code or this manual.
+For an introduction to Doxygen documentation,
+see the @ref primerdoxygen.
+
+@section styledoxyblocks Doxygen Block Selection
+
+Several different types of Doxygen comments can be used; often,
+one style will be the most appropriate for a specific context.
+The following guidelines provide developers with heuristics for
+selecting an appropriate form and writing consistent documentation
+comments.
+
+-# use @c /// to for one-line documentation of instances.
+-# for documentation requiring multiple lines, use a "block" style:
+@verbatim
+/**
+ * @brief First sentence is short description.  Remaining text becomes
+ * the full description block, where "empty" lines start new paragraphs.
+ *
+ * One can make text appear in @a italics, @b bold, @c monospace, or
+ * in blocks such as the one in which this example appears in the Style
+ * Guide.  See the Doxygen Manual for the full list of commands.
+ *
+ * @param foo For a function, describe the parameters (e.g. @a foo).
+ * @returns The value(s) returned, or possible error conditions.
+ */
+@endverbatim
+  -# The block should start on the line following the opening @c /\**.
+  -# The end of the block, @c *&zwj;/, should also be on its own line.
+  -# Every line in the block should have a @c '*' in-line with its start:
+    - A leading space is required to align the @c '*' with the @c /\** line.
+    - A single "empty" line should separate the function documentation
+      from the block of parameter and return value descriptions.
+    - Except to separate paragraphs of documentation, other extra
+      "empty" lines should be removed from the block.
+  -# Only single spaces should be used; do @b not add mid-line indentation.
+-# If the total line length will be less than 72-80 columns, then
+  - The @c /\**< form can be used on the same line.
+  - This style should be used sparingly; the best use is for fields:
+    @verbatim int field; /**< field description */ @endverbatim
+
+@section styledoxyall Doxygen Style Guide
+
+The following guidelines apply to all Doxygen comment blocks:
+
+-# Use the @c '\@cmd' form for all doxygen commands (do @b not use @c '\\cmd').
+-# Use symbol names such that Doxygen automatically creates links:
+  -# @c function_name() can be used to reference functions
+    (e.g. flash_set_dirty()).
+  -# @c struct_name::member_name should be used to reference structure
+    fields in the documentation (e.g. @c flash_driver::name).
+  -# URLS get converted to markup automatically, without any extra effort.
+  -# new pages can be linked into the hierarchy by using the @c \@subpage
+    command somewhere the page(s) under which they should be linked:
+  -# use @c \@ref in other contexts to create links to pages and sections.
+-# Use good Doxygen mark-up:
+  -# '\@a' (italics) should be used to reference parameters (e.g. <i>foo</i>).
+  -# '\@b' (bold) should be used to emphasizing <b>single</b> words.
+  -# '\@c' (monospace) should be used with <code>file names</code> and
+  <code>code symbols</code>, so they appear visually distinct from
+  surrounding text.
+  -# To mark-up multiple words, the HTML alternatives must be used.
+-# Two spaces should be used when nesting lists; do @b not use '\\t' in lists.
+-# Code examples provided in documentation must conform to the Style Guide.
+
+@section styledoxytext Doxygen Text Inputs
+
+In addition to the guidelines in the preceding sections, the following
+additional style guidelines should be considered when writing
+documentation as part of standalone text files:
+
+-# Text files must contain Doxygen at least one comment block:
+  -# Documentation should begin in the first column (except for nested lists).
+  -# Do NOT use the @c '*' convention that must be used in the source code.
+-# Each file should contain at least one @c \@page block.
+  -# Each new page should be listed as a \@subpage in the \@page block
+  of the page that should serve as its parent.
+  -# Large pages should be structure in parts using meaningful \@section
+  and \@subsection commands.
+-# Include a @c \@file block at the end of each Doxygen @c .txt file to
+  document its contents:
+  - Doxygen creates such pages for files automatically, but no content
+    will appear on them for those that only contain manual pages.
+  - The \@file block should provide useful meta-documentation to assist
+    technical writers; typically, a list of the pages that it contains.
+  - For example, the @ref styleguide exists in @c doc/manual/style.txt,
+    which contains a reference back to itself.
+-# The \@file and \@page commands should begin on the same line as
+   the start of the Doxygen comment:
+@verbatim
+/** @page pagename Page Title
+
+Documentation for the page.
+
+ */
+/** @file
+
+This file contains the @ref pagename page.
+
+ */
+@endverbatim
+
+For an example, the Doxygen source for this Style Guide can be found in
+@c doc/manual/style.txt, alongside other parts of The Manual.
+
+ */
+/** @page styletexinfo Texinfo Style Guide
+
+The User's Guide is there to provide two basic kinds of information.  It
+is a guide for how and why to use each feature or mechanism of OpenOCD.
+It is also the reference manual for all commands and options involved
+in using them, including interface, flash, target, and other drivers.
+At this time, it is the only documentation for end users; everything
+else is addressing OpenOCD developers.
+
+There are two key audiences for the User's Guide, both developer based.
+The primary audience is developers using OpenOCD as a tool in their
+work, or who may be starting to use it that way.  A secondary audience
+includes developers who are supporting those users by packaging or
+customizing it for their hardware, installing it as part of some software
+distribution, or by evolving OpenOCD itself.  There is some crossover
+between those audiences.  We encourage contributions from users as the
+fundamental way to evolve and improve OpenOCD.  In particular, creating
+a board or target specific configuration file is something that many
+users will end up doing at some point, and we like to see such files
+become part of the mainline release.
+
+General documentation rules to remember include:
+
+- Be concise and clear.  It's work to remove those extra words and
+  sentences, but such "noise" doesn't help readers.
+- Make it easy to skim and browse.  "Tell what you're going to say,
+  then say it".  Help readers decide whether to dig in now, or
+  leave it for later.
+- Make sure the chapters flow well.  Presentations should not jump
+  around, and should move easily from overview down to details.
+- Avoid using the passive voice.
+- Address the reader to clarify roles ("your config file", "the board you
+  are debugging", etc.); "the user" (etc) is artificial.
+- Use good English grammar and spelling.  Remember also that English
+  will not be the first language for many readers.  Avoid complex or
+  idiomatic usage that could create needless barriers.
+- Use examples to highlight fundamental ideas and common idioms.
+- Don't overuse list constructs.  This is not a slide presentation;
+  prefer paragraphs.
+
+When presenting features and mechanisms of OpenOCD:
+
+- Explain key concepts before presenting commands using them.
+- Tie examples to common developer tasks.
+- When giving instructions, you can \@enumerate each step both
+  to clearly delineate the steps, and to highlight that this is
+  not explanatory text.
+- When you provide "how to use it" advice or tutorials, keep it
+  in separate sections from the reference material.
+- Good indexing is something of a black art.  Use \@cindex for important
+  concepts, but don't overuse it.  In particular, rely on the \@deffn
+  indexing, and use \@cindex primarily with significant blocks of text
+  such as \@subsection.  The \@dfn of a key term may merit indexing.
+- Use \@xref (and \@anchor) with care.  Hardcopy versions, from the PDF,
+  must make sense without clickable links (which don't work all that well
+  with Texinfo in any case).  If you find you're using many links,
+  read that as a symptom that the presentation may be disjointed and
+  confusing.
+- Avoid font tricks like \@b, but use \@option, \@file, \@dfn, \@emph
+  and related mechanisms where appropriate.
+
+For technical reference material:
+
+- It's OK to start sections with explanations and end them with
+  detailed lists of the relevant commands.
+- Use the \@deffn style declarations to define all commands and drivers.
+  These will automatically appear in the relevant index, and those
+  declarations help promote consistent presentation and style.
+   - It's a "Command" if it can be used interactively.
+   - Else it's a "Config Command" if it must be used before the
+     configuration stage completes.
+   - For a "Driver", list its name.
+   - Use EBNF style regular expressions to define parameters:
+     brackets around zero-or-one choices, parentheses around
+     exactly-one choices.
+   - Use \@option, \@file, \@var and other mechanisms where appropriate.
+   - Say what output it displays, and what value it returns to callers.
+   - Explain clearly what the command does.  Sometimes you will find
+     that it can't be explained clearly.  That usually means the command
+     is poorly designed; replace it with something better, if you can.
+   - Be complete:  document all commands, except as part of a strategy
+     to phase something in or out.
+   - Be correct:  review the documentation against the code, and
+     vice versa.
+- Alphabetize the \@defn declarations for all commands in each
+  section.
+- Keep the per-command documentation focused on exactly what that
+  command does, not motivation, advice, suggestions, or big examples.
+  When commands deserve such expanded text, it belongs elsewhere.
+  Solutions might be using a \@section explaining a cluster of related
+  commands, or acting as a mini-tutorial.
+- Details for any given driver should be grouped together.
+
+The User's Guide is the first place most users will start reading,
+after they begin using OpenOCD.  Make that investment of their time
+be as productive as possible.  Needing to look at OpenOCD source code,
+to figure out how to use it is a bad sign, though it's OK to need to
+look at the User's guide to figure out what a config script is doing.
+
+ */
+/** @page stylelatex LaTeX Style Guide
+
+This page needs to provide style guidelines for using LaTeX, the
+typesetting language used by The References for OpenOCD Hardware.
+Likewise, the @ref primerlatex for using this guide needs to be completed.
+
+ */
+/** @page styleperl Perl Style Guide
+
+This page provides some style guidelines for using Perl, a scripting
+language used by several small tools in the tree:
+
+-# Ensure all Perl scripts use the proper suffix (@c .pl for scripts, and
+   @c .pm for modules)
+-# Pass files as script parameters or piped as input:
+  - Do NOT code paths to files in the tree, as this breaks out-of-tree builds.
+  - If you must, then you must also use an automake rule to create the script.
+-# use @c '#!/usr/bin/perl' as the first line of Perl scripts.
+-# always <code>use strict</code> and <code>use warnings</code>
+-# invoke scripts indirectly in Makefiles or other scripts:
+@code
+perl script.pl
+@endcode
+
+Maintainers must also be sure to follow additional guidelines:
+-# Ensure that Perl scripts are committed as executables:
+    Use "<code>chmod +x script.pl</code>"
+    @a before using "<code>git add script.pl</code>"
+
+ */
+/** @page styleautotools Autotools Style Guide
+
+This page contains style guidelines for the OpenOCD autotools scripts.
+
+The following guidelines apply to the @c configure.ac file:
+- Better guidelines need to be developed, but until then...
+- Use good judgement.
+
+The following guidelines apply to @c Makefile.am files:
+-# When assigning variables with long lists of items:
+  -# Separate the values on each line to make the files "patch friendly":
+@code
+VAR = \
+	value1 \
+	value2 \
+	...
+	value9 \
+	value10
+@endcode
+ */
+/** @file
+
+This file contains the @ref styleguide pages.  The @ref styleguide pages
+include the following Style Guides for their respective code and
+documentation languages:
+
+- @ref styletcl
+- @ref stylec
+- @ref styledoxygen
+- @ref styletexinfo
+- @ref stylelatex
+- @ref styleperl
+- @ref styleautotools
+
+ */

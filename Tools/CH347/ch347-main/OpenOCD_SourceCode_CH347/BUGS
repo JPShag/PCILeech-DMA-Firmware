@@ -1,0 +1,74 @@
+// This file is part of the Doxygen Developer Manual
+/** @page bugs Bug Reporting
+
+Please report bugs by subscribing to the OpenOCD mailing list and
+posting a message with your report:
+
+	openocd-devel@lists.sourceforge.net
+
+Also, please check the bug database to see if a ticket for
+the bug has already been opened.  You might be asked to open
+such a ticket, or to update an existing ticket with more data.
+
+	http://bugs.openocd.org/
+
+To minimize work for OpenOCD developers, you should try to include
+all of the information listed below.  If you feel that some of the
+items below are unnecessary for a clear bug report, you may leave
+them out; likewise, feel free to include additional information
+that may be important.
+
+- Target PCB/board description
+- Configuration scripts
+- OpenOCD command line
+- List of commands issued or GDB operations performed
+- Expected result
+- Actual result
+- Logs using <code>debug_level 3</code> (or with '-d 3' on the command line)
+- If the report is for a regression:
+  - Include logs for both working and broken versions.
+  - Find the precise version that caused the regression by binary search.
+    You can use "git bisect" to expedite this binary search:
+    http://www.kernel.org/pub/software/scm/git/docs/git-bisect.html
+
+If possible, please develop and attach a patch that helps to expose or
+solve the reported problem.  See the HACKING file for information
+about that process.
+
+Attach all files directly to your posting.  The mailing list knows to
+transform attachments to links, but attachments must be less than 300KB
+in total.
+
+@section bugscrashdump Obtaining Crash Backtraces
+
+If OpenOCD is crashing, there are two very effective things you can do to
+improve your chances of getting help on the development mailing list.
+
+Try to reproduce the problem using the dummy JTAG interface to allow other developers to replicate
+your problem robustly and use GDB to get a trace:@par
+@code
+% OPENOCDSRC/configure --enable-dummy ...
+% openocd -f interface/dummy.cfg -f target/xxx.cfg
+=> SEGFAULT
+% gdb --args openocd ....
+(gdb) run
+(gdb) bt
+=> here a stack trace is dumped.
+@endcode
+
+@section bugsintreedebug Running and Debugging In-Tree
+
+To run or debug the in-tree executable (not recommended), you must
+use libtool to set up the correct shared library paths:
+@code
+  libtool gdb --args openocd ....
+@endcode
+or the more pedantic (and forward-compatible):
+@code
+  libtool --mode=execute gdb --args openocd ....
+@endcode
+
+ */
+/** @file
+This file contains the @ref bugs page.
+*/

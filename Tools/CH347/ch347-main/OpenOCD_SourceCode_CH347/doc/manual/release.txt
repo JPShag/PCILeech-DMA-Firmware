@@ -1,0 +1,465 @@
+/** @page releases Release Processes
+
+This page provides an introduction to the OpenOCD Release Processes:
+
+- @ref releasewhy - Explain the motivations for producing
+  releases on a regular basis.
+- @ref releasewho - Describes the responsibilities and
+  authority required to produce official OpenOCD releases.
+- @ref releasewhen - Provides guidelines for scheduling
+  activities for each release cycle.
+- @ref releasehow - Outlines all of the steps for the
+  processes used to produce and release the package source archives.
+- @ref releasescriptcmds - Introduces the automated @c release.sh script.
+
+@section releasewhy Why Produce Releases?
+
+The OpenOCD maintainers produce <i>releases</i> periodically for many
+reasons.  This section provides the key reasons for making releases on a
+regular basis and why a set of <i>release processes</i> should be used
+to produce them.
+
+At any time, <i>source archives</i> can be produced by running
+<code>make dist</code> in the OpenOCD project tree.  With the 0.2.0
+release, this command will package the tree into several popular archive
+formats: <code>openocd-\<version\>.{tar.gz,tar.bz2,zip}</code>.  If
+produced properly, these files are suitable for release to the public.
+
+When properly versioned and released for users, these archives present
+several important advantages compared to using the source repository
+(including snapshots downloaded from that repository using gitweb):
+
+-# They allow others to package and distribute the code using
+   consistent version labels.  Users won't normally need to care
+   whose package they use, just the version of OpenOCD.
+-# They contain a working configure script and makefiles, which
+   were produced as part of creating the archive.
+-# Because they have been formally released by the project, users
+   don't need to try a random work-in-process revision.  Releasing
+   involves spending some time specifically on quality improvements,
+   including bugfixing source code and documentation.
+-# They provide developers with the flexibility needed to address
+   larger issues, which sometimes involves temporary breakage.
+
+Hopefully, this shows several good reasons to produce regular releases,
+but the release processes were developed with some additional design
+goals in mind.  Specifically, the releases processes should have the
+following properties:
+
+-# Produce successive sets of archives cleanly and consistently.
+-# Implementable as a script that automates the critical steps.
+-# Prevent human operators from producing broken packages, when possible.
+-# Allow scheduling and automation of building and publishing milestones.
+
+The current release processes are documented in the following sections.
+They attempt to meet these design goals, but improvements may still
+need to be made.
+
+@subsection version_labels Version Labels
+
+Users can display the OpenOCD version string in at least two
+ways.  The command line <code>openocd -v</code> invocation
+displays it; as does the Tcl <code>version</code> command.
+
+Labels for released versions look like <em>0.3.0</em>, or
+<em>0.3.0-rc1</em> for a preliminary release.
+Non-released (developer) versions look like <em>0.3.0-dev</em>,
+or <em>0.3.0-rc1-dev</em>.
+In all cases, additional tags may be appended to those base
+release version labels.
+
+The <code>tools/release/version.sh</code> script is used to
+manipulate version IDs found in the source tree.
+
+@subsubsection releaseversions Release Versions and Tags
+
+The OpenOCD version string is composed of three numeric components
+separated by two decimal points: @c x.y.z, where @c x is the @a major
+version number, @c y is the @a minor number, and @c z is the @a micro.
+For any <em>bug-fix</em> release, the micro version number will be non-zero
+(<code>z > 0</code>).  For a <i>minor release</i>, the micro version
+number will be zero (<code>z = 0</code>).  For a <i>major releases</i>,
+the minor version will @a also be zero (<code>y = 0, z = 0</code>).
+
+After these required numeric components, release version strings
+may contain tags such as <em>-rc1</em> or <em>-rc2</em>.
+These 'rc' tags indicate "release candidate" versions of the package.
+Like major/minor/micro numbers, these are updated
+as part of the release process.
+
+The release process includes version number manipulations to the tree
+being released, ensuring that all numbers are incremented (or rolled
+over) at the right time and in the proper locations of the repository.
+One of those manipulations creates a repository tag matching that
+release's version label.
+
+@subsubsection releaseversionsdist Packager Versions
+
+Distributors of patched versions of OpenOCD are encouraged to extend the
+version string with a unique version tag when producing external
+releases, as this helps to identify your particular distribution series.
+Knowing that a release has such patches can be essential to tracking
+down and fixing bugs.
+
+Packager version tags should always be suffixes to the version
+code from the OpenOCD project, signifying modifications to the
+original code base.  Each packager release should have a unique
+version.
+
+For example, the following command will add a 'foo' tag to the
+configure.ac script of a local copy of the source tree, giving
+a version label like <em>0.3.0-foo</em>:
+
+@code
+tools/release/version.sh tag add foo
+@endcode
+
+This command will modify the configure.ac script in your working copy
+only.  After running the @c bootstrap sequence, the tree can be patched
+and used to produce your own derived versions.  You might check that
+change into a private branch of your git tree, along with the other
+patches you are providing.
+
+You can also "bump" those tags (so "foo1" becomes "foo2" etc)
+each time a derived package is released, incrementing the tag's
+version to facilitate tracking the changes you have distributed.
+
+@code
+tools/release/version.sh bump tag foo
+@endcode
+
+Of course, any patches in your branches must be provided to
+your customers, and be in conformance with the GPL.  In most
+cases you should also work to merge your improvements to the
+mainline tree.
+
+@subsubsection version_tags Development Versions and Tags
+
+Everything except formal releases should have the tag <em>-dev</em>
+in their version number.  This helps developers identify reports
+created from non-release versions, and it can be detected and
+manipulated by the release script.  Specifically, this tag will be
+removed and re-added during the release process; it should never be
+manipulated by developers in submitted patches.
+
+Versions built from developer trees may have additional tags.
+Trees built from git snapshots have <em>snapshot</em> tags.
+When built from a "live" git tree, tags specify
+specific git revisions:
+
+0.3.0-rc1-dev-00015-gf37c9b8-dirty
+
+indicates a development tree based on git revision f37c9b8
+(a truncated version of a SHA1 hash) with some non-git
+patches applied (the <em>dirty</em> tag).  This information
+can be useful when tracking down bugs.
+(Note that at this writing, the tags do not directly
+correspond to <code>git describe</code> output.  The
+hash ID can be used with <code>git show</code>, but
+the relevant repository tag isn't <em>0.3.0-rc1-dev</em>;
+this might change in the future.)
+
+@section releasewho Release Manager
+
+OpenOCD archive releases will be produced by an individual filling the
+role of <i>Release Manager</i>, hereafter abbreviated as <i>RM</i>.  This
+individual determines the schedule and executes the release processes
+for the community.
+
+@subsection releasewhohow RM Authority
+
+Each release requires one individual to fulfill the RM role; however,
+graceful transitions of this authority may take place at any time.  The
+current RM may transfer their authority to another contributor in a post
+to the OpenOCD development mailing list.  Such delegation of authority
+must be approved by the individual that will receive it and the
+community of maintainers.  Initial arrangements with the new RM should
+be made off-list, as not every contributor wants these responsibilities.
+
+@subsection releasewhowhat RM Responsibilities
+
+In addition to the actual process of producing the releases, the RM is
+responsible for keeping the community informed of all progress through
+the release cycle(s) being managed.  The RM is responsible for managing
+the changes to the package version, though the release tools should
+manage the tasks of adding or removing any required development branch
+tags and incrementing the version.
+
+These responsibilities matter most towards the end of the release
+cycle, when the RM creates the first RC and all contributors enter
+a quality-improvement mode.  The RM works with other contributors
+to make sure everyone knows what kinds of fixes should merge, the
+status of major issues, and the release timetable.
+
+In particular, the RM has the final decision on whether a given
+bug should block the release.
+
+@section releasewhen Release Schedule
+
+The OpenOCD release process must be carried out on a periodic basis, so
+the project can realize the benefits presented in answer to the question,
+@ref releasewhy.
+
+Starting with the 0.2.0 release, the OpenOCD project expects to produce
+new releases every few months.
+Bug fix releases could be provided more frequently.  These release
+schedule goals may be adjusted in the future, after the project
+maintainers and distributors receive feedback and experience.
+
+More importantly, the statements made in this section do not create an
+obligation by any member of the OpenOCD community to produce new
+releases on regular schedule, now or in the future.
+
+@subsection releasewhenexample Sample Schedule
+
+The RM must pro-actively communicate with the community from the
+beginning of the development cycle through the delivery of the new
+release.  This section presents guidelines for scheduling key points
+where the community must be informed of changing conditions.
+
+If Tn is the time of release n, then the following schedule
+might describe some key T0-to-T1 release cycle milestones.
+
+- T0 ... End of T0 release cycle. T1 cycle starts, with merge
+  window opening.  Developers begin to merge queued work.
+- <em>... several weeks of merge window ...</em>
+- RC1 ... Close mainline to new work.  Produce RC1
+  release, begin testing phase; developers are in "bugfix mode",
+  all other work is queued; send out planned endgame schedule.
+- RC2 ... Produce RC2 and send schedule update to
+  mailing list, listing priorities for remaining fixes
+- <em>... more RC milestones, until ready ...</em>
+- T1: End of T1 release cycle. T2 cycle starts, with merge
+  window opening.  Developers begin to merge queued work.
+
+Note that until it happens, any date for T1 is just a goal.
+Critical bugs prevent releases from happening.  We are just
+beginning to use this window-plus-RCs process, so the lengths
+of the merge windows versus the RC phase is subject to change.
+Most projects have RC phases of a month or more.
+
+Some additional supplemental communication will be desirable.  The above
+list omits the step-by-step instructions to daily release management.
+Individuals performing release management need to have the ability to
+interact proactively with the community as a whole, anticipating when
+such interaction will be required and giving ample notification.
+
+The next section explains why the OpenOCD project allows significant
+flexibility in the part of the development that precedes the release
+process.
+
+@subsection releasewhenflex Schedule Flexibility
+
+The Release Manager should attempt to follow the guidelines in this
+document, but the process of scheduling each release milestone should be
+community driven at the start.  Features that don't complete before
+the merge window closes can be held (perhaps in some branch) until
+the next merge window opens, rather than delaying the release cycle.
+
+The Release
+Manager cannot schedule the work that will be done on the project,
+when it will be submitted, reviewed, and deemed suitable to be committed.
+That is, the RM cannot act as a priest in a cathedral; OpenOCD uses
+the bazaar development model.  The release schedule must adapt
+continuously in response to changes in the rate of work.
+Fewer releases may be
+required if developers contribute less patches, and more releases may be
+desirable if the project continues to grow and experience high rates of
+community contribution.  During each cycle, the RM should be tracking
+the situation and gathering feedback from the community.
+
+@section releasehow Release Process: Step-by-Step
+
+The release process is not final; it may need more iterations
+to work out bugs.
+While there are release scripts, key steps require community
+support; the Release Manager isn't the only participant.
+
+The following steps should be followed to produce each release:
+
+-# Produce final patches using a local clone of mainline.  Nobody
+   except the RM should be committing anything.  <em>Everyone with commit
+   privileges needs to know and agree to this in advance!</em>  Even the RM
+   only commits a handful of updates as part of the release process
+   itself ... to files which are part of the version identification scheme
+   or release process; and to create the version tag; and then to open the
+   merge window for the next release cycle.
+  -# Finalize @c the NEWS file to describe the changes in the release
+    - This file is used to automatically post "blurbs" about the project.
+    - This material should have been produced during the development cycle,
+      by adding items for each @c NEWS-worthy contribution, when committed
+      during the merge window.  (One part of closing the merge window, by
+      opening the RC phase of the release, is the commitment to hold all
+      further such contributions until the next merge window opens.)
+    - The RM should make sure nothing important was omitted, as part of
+      the RC1 cycle.  From then on, no more updates to NEWS content should
+      be needed (except to seed the process for the next release, or maybe
+      if a significant and longstanding bug is fixed late in the RC phase).
+  -# Bump library version if our API changed (not yet required)
+  -# Update and commit the final package version in @c configure.ac:
+     (The <code>tools/release/version.sh</code> script might help ensure
+     the versions are named properly.):
+    -# Remove @c -dev tag.
+    -# Update any @c -rc tag:
+      - If producing the final release from an -rc series, remove it
+      - If producing the first RC in a series, add rc1
+      - If producing the next RC in a series, bump the rc number
+    -# Commit that version change, with a good descriptive comment.
+  -# Create a git tag for the final commit, with a tag name matching
+     the version string in <code>configure.ac</code> (including <em>-rcN</em>
+     where relevant):
+@verbatim
+PACKAGE_VERSION="x.y.z"
+PACKAGE_TAG="v${PACKAGE_VERSION}"
+git tag -m "The openocd-${PACKAGE_VERSION} release." "${PACKAGE_TAG}"
+@endverbatim
+  -# Do not push those changes to mainline yet; only builds using the
+     source archives you will be creating should ever be labeled as
+     official releases (with no "-dev" suffix).  Since mainline is a
+     development tree, these will be pushed later, as part of opening
+     the merge window for the next release cycle (restoring the "-dev"
+     suffix for that next release.)  Those version and tag updates are
+     the last ones to be included in the release being made.
+-# Produce the release files, using the local clone of the source
+  tree which holds the release's tag and updated version in
+  @c configure.ac ... this is used only to produce the release, and
+  all files should already be properly checked out.
+  -# Run <code>tools/release.sh package</code> to produce the
+	source archives.  This automatically bootstraps and
+	configures the process.
+  -# Run <code>tools/release.sh stage</code> to create an @c archives
+	directory with the release data, including MD5 and SHA1
+	checksum files.
+  -# Sanity check at least one of those archives, by extracting and
+     configuring its contents, using them to build a copy of OpenOCD,
+     and verifying that the result prints the correct release version
+     in its startup banner.  (For example,
+     "configure --enable-parport"
+     then "make" and run "src/openocd -v" as a sanity check.)
+  -# Run <code>make docs</code> to create the
+     documentation which will be published.
+-# Upload packages and post announcements of their availability:
+  -# Release packages into files section of project sites:
+    - SF.net:
+     -# Under "Project Admin", use the "File Manager"
+     -# Create a new folder under "openocd" named "${PACKAGE_VERSION}"
+     -# Upload the @c NEWS file and mark it as the release notes.
+     -# Upload the three source archive files, using the Web interface,
+     	into that folder.  Verify the upload worked OK by checking the
+	MD5 and SHA1 checksums computed by SourceForge against the
+	versions created as part of staging the release.
+     -# Also upload doc/openocd.pdf (the User's Guide) so the version
+        matching each release will be easily available.
+     -# Select each file in the release, and use the property panel
+        to set its type and select the right release notes.
+       - .tar.bz2: Linux, Mac
+       - .tar.gz: BSD, Solaris, Others
+       - .zip: Windows
+       - For openocd.pdf just associate it with the right release notes.
+     -# Create an SF.net project news update.
+  -# Depending on how paranoid you're feeling today, verify the images by
+     downloading them from the websites and making sure there are no
+     differences between the downloaded copies and your originals.
+  -# Publish User's and Developer's Guides to the project web sites:
+     -# Use SCP to update the SF.net web site with PDF and HTML for the
+          User's Guide, and HTML for the developer's guide ... you can
+	  instantiate a shell.sourceforge.net instance and set up symlinks
+	  from your home directory, to simplify this process.
+  -# Post announcement e-mail to the openocd-development list.
+  -# optionally:
+     -# Post an update on the OpenOCD blog.
+     -# Announce updates on freshmeat.net and other trackers.
+     -# Submit updates to news feeds (e.g. Digg, Reddit, etc.).
+-# Resume normal development on mainline, by opening the merge window for
+  the next major or minor release cycle.  (You might want to do this
+  before all the release bits are fully published.)
+  - Update the version label in the @c configure.ac file:
+     - Restore @c -dev version tag.
+     - For a new minor release cycle, increment the release's minor number
+     - For a new major release cycle, increment the release's major number
+       and zero its minor number
+  - Archive @c NEWS file as "<code>doc/news/NEWS-${PACKAGE_VERSION}</code>".
+  - Create a new @c NEWS file for the next release
+  - Commit those changes.
+  - Push all the updates to mainline.
+     - Last updates for the release, including the release tag (you
+       will need to "git push --tags").
+     - Updates opening the merge window
+  - At this point, it's OK for committers to start pushing changes
+    which have been held off until the next release.  (Any bugfixes to
+    this release will be against a bug-fix release branch starting from
+    the commit you tagged as this release, not mainline.)
+  - Announce to the openocd-development list.  Ideally, you will also
+    be able to say who is managing the next release cycle.
+
+To start a bug-fix release branch:
+-# Create a new branch, starting from a major or
+   minor release tag
+-# Restore @c -dev version tag.
+-# Bump micro version number in configure.ac
+-# Backport bugfix patches from mainline into that branch.
+   (Always be sure mainline has the fix first, so it's hard
+   to just lose a bugfix.)
+-# Commit and push those patches.
+-# When desired, release as above ... except note that the next
+   release of a bugfix branch is never a new major or minor release
+
+@subsection releasescriptcmds Release Script Commands
+
+The @c release.sh script automates some of the steps involved
+in making releases, simplifying the Release Manager's work.
+
+The release script can be used for two tasks:
+- Creating releases and starting a new release cycle:
+@code
+git checkout master
+tools/release.sh --type=minor --final --start-rc release
+@endcode
+- Creating a development branch from a tagged release:
+@code
+git checkout 'v0.2.0'
+tools/release.sh --type=micro branch
+@endcode
+
+Both of these variations make automatic commits and tags in your
+repository, so you should be sure to run it on a cloned copy before
+proceeding with a live release.
+
+@subsection releasescriptopts Release Script Options
+
+The @c release.sh script recognizes some command-line options that
+affect its behavior:
+
+- The @c --start-rc indicates that the new development release cycle
+  should start with @c -rc0.  Without this, the @c -rc tag will be omitted,
+  leading to non-monotonic versioning of the in-tree version numbers.
+- The @c --final indicates that the release should drop the @c -rc tag,
+  to going from @c x.y.z-rcN-dev to x.y.z.
+
+@subsection releasescriptenv Release Script Environment
+
+The @c release.sh script recognizes some environment variables which
+affect its behavior:
+
+- @c CONFIG_OPTS : Passed as options to the configure script.
+- @c MAKE_OPTS : Passed as options to the 'make' processes.
+
+@section releasetutorial Release Tutorials
+
+This section should contain a brief tutorial for using the Release
+Script to perform release tasks, but the new script needs to be
+used for 0.3.0.
+
+@section releasetodo Release Script Shortcomings
+
+Improved automated packaging and distribution of OpenOCD requires more
+patching of the configure script.  The final release script should be
+able to manage most steps of the processes.  The steps requiring user
+input could be guided by an "assistant" that walks the Release Manager
+through the process from beginning to end, performing basic sanity
+checks on their various inputs (e.g. the @c NEWS blurb).
+
+ */
+/** @file
+This file contains the @ref releases page.
+ */

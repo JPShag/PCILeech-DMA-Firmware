@@ -1,0 +1,166 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+
+/***************************************************************************
+ *                                                                         *
+ * Copyright (C) ST-Ericsson SA 2011                                       *
+ * Author: Michel Jaouen <michel.jaouen@stericsson.com> for ST-Ericsson.   *
+ ***************************************************************************/
+
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
+
+#include "server/server.h"
+
+#include "target/target.h"
+
+#include "server/gdb_server.h"
+#include "smp.h"
+#include "helper/binarybuffer.h"
+
+/* DEPRECATED: gdb_read_smp_packet/gdb_write_smp_packet to be removed      */
+/*  implementation of new packet in gdb interface for smp feature          */
+/*                                                                         */
+/*   j : smp  status request                                               */
+/*   J : smp  set request                                                  */
+/*                                                                         */
+/*   jc :read core id displayed by gdb connection                          */
+/*   reply XXXXXXXX core id is int32_t , 8 hex digits                      */
+/*                                                                         */
+/*   Reply ENN error not supported (target not smp)                        */
+/*                                                                         */
+/*   JcXX  set core id displayed at next gdb continue                      */
+/*   maximum 8 bytes described core id int32_t (8 hex digits)              */
+/*  (core id -1 , reserved for returning to normal continue mode) */
+/*  Reply ENN error not supported(target not smp,core id out of range)     */
+/*  Reply OK : for success                                                 */
+/*                                                                         */
+/*  handling of this packet within gdb can be done by the creation         */
+/*  internal variable by mean of function allocate_computed_value          */
+/*  set $_core 1 => Jc01 packet is sent                                    */
+/*  print $_core => jc packet is sent and result is affected in $          */
+/*  Another way to test this packet is the usage of maintenance packet     */
+/*  maint packet Jc01                                                      */
+/*  maint packet jc                                                        */
+
+/* packet j :smp status request */
+#define DEPRECATED_MSG "DEPRECATED: This method is deprecated in favor of the hwthread pseudo RTOS"
+int gdb_read_smp_packet(struct connection *connection,
+		char const *packet, int packet_size)
+{
+	struct target *target = get_target_from_connection(connection);
+	int retval = ERROR_OK;
+
+	LOG_WARNING(DEPRECATED_MSG);
+
+	if (target->smp) {
+		if (strncmp(packet, "jc", 2) == 0) {
+			const uint32_t len = sizeof(target->gdb_service->core[0]);
+			char hex_buffer[len * 2 + 1];
+			uint8_t buffer[len];
+			buf_set_u32(buffer, 0, len * 8, target->gdb_service->core[0]);
+			size_t pkt_len = hexify(hex_buffer, buffer, sizeof(buffer),
+				sizeof(hex_buffer));
+
+			retval = gdb_put_packet(connection, hex_buffer, pkt_len);
+		}
+	} else
+		retval = gdb_put_packet(connection, "E01", 3);
+	return retval;
+}
+
+/* J :  smp set request */
+int gdb_write_smp_packet(struct connection *connection,
+		char const *packet, int packet_size)
+{
+	struct target *target = get_target_from_connection(connection);
+	char *separator;
+	int coreid = 0;
+	int retval = ERROR_OK;
+
+	LOG_WARNING(DEPRECATED_MSG);
+
+	/* skip command character */
+	if (target->smp) {
+		if (strncmp(packet, "Jc", 2) == 0) {
+			packet += 2;
+			coreid = strtoul(packet, &separator, 16);
+			target->gdb_service->core[1] = coreid;
+			retval = gdb_put_packet(connection, "OK", 2);
+		}
+	} else
+		retval = gdb_put_packet(connection, "E01", 3);
+
+	return retval;
+}
+
+COMMAND_HANDLER(default_handle_smp_command)
+{
+	struct target *target = get_current_target(CMD_CTX);
+	struct target_list *head;
+
+	if (CMD_ARGC > 1)
+		return ERROR_COMMAND_SYNTAX_ERROR;
+
+	if (!CMD_ARGC) {
+		command_print(CMD, "%s", target->smp ? "on" : "off");
+		return ERROR_OK;
+	}
+
+	if (!strcmp(CMD_ARGV[0], "on")) {
+		foreach_smp_target(head, target->smp_targets)
+			head->target->smp = 1;
+
+		return ERROR_OK;
+	}
+
+	if (!strcmp(CMD_ARGV[0], "off")) {
+		foreach_smp_target(head, target->smp_targets)
+			head->target->smp = 0;
+
+		/* fixes the target display to the debugger */
+		if (!list_empty(target->smp_targets))
+			target->gdb_service->target = target;
+
+		return ERROR_OK;
+	}
+
+	return ERROR_COMMAND_SYNTAX_ERROR;
+}
+
+COMMAND_HANDLER(handle_smp_gdb_command)
+{
+	struct target *target = get_current_target(CMD_CTX);
+	int retval = ERROR_OK;
+	if (!list_empty(target->smp_targets)) {
+		if (CMD_ARGC == 1) {
+			int coreid = 0;
+			COMMAND_PARSE_NUMBER(int, CMD_ARGV[0], coreid);
+			if (retval != ERROR_OK)
+				return retval;
+			target->gdb_service->core[1] = coreid;
+
+		}
+		command_print(CMD, "gdb coreid  %" PRId32 " -> %" PRId32, target->gdb_service->core[0]
+			, target->gdb_service->core[1]);
+	}
+	return ERROR_OK;
+}
+
+const struct command_registration smp_command_handlers[] = {
+	{
+		.name = "smp",
+		.handler = default_handle_smp_command,
+		.mode = COMMAND_EXEC,
+		.help = "smp handling",
+		.usage = "[on|off]",
+	},
+	{
+		.name = "smp_gdb",
+		.handler = handle_smp_gdb_command,
+		.mode = COMMAND_EXEC,
+		.help = "display/fix current core played to gdb",
+		.usage = "",
+	},
+	COMMAND_REGISTRATION_DONE
+};
