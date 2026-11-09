@@ -33,7 +33,7 @@ FLASH_BANK_COMMAND_HANDLER(jtagspi_flash_bank_command)
 	if (CMD_ARGC < 7)
 		return ERROR_COMMAND_SYNTAX_ERROR;
 
-	info = malloc(sizeof(struct jtagspi_flash_bank));
+	info = calloc(1, sizeof(struct jtagspi_flash_bank));
 	if (!info) {
 		LOG_ERROR("no memory for flash bank info");
 		return ERROR_FAIL;
